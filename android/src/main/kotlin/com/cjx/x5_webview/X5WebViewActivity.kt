@@ -37,7 +37,6 @@ class X5WebViewActivity : Activity() {
             settings.domStorageEnabled = true
             loadUrl(intent.getStringExtra("url"), headers)
             val isUrlIntercept=intent.getBooleanExtra("isUrlIntercept",false)
-            webView?.settings?.mediaPlaybackRequiresUserGesture = false
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, url: String?): Boolean {
