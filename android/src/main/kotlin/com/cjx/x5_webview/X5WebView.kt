@@ -29,6 +29,7 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
             settings.domStorageEnabled = params["domStorageEnabled"] as Boolean
 //            settings.javaScriptCanOpenWindowsAutomatically = true
 //                settings.layoutAlgorithm=LayoutAlgorithm.SINGLE_COLUMN
+            webView?.settings?.mediaPlaybackRequiresUserGesture = false
 
             if (params["javascriptChannels"] != null) {
                 val names = params["javascriptChannels"] as List<String>
