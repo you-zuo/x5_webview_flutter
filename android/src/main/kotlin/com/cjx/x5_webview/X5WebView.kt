@@ -30,6 +30,8 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
 //            settings.javaScriptCanOpenWindowsAutomatically = true
 //                settings.layoutAlgorithm=LayoutAlgorithm.SINGLE_COLUMN
             webView?.settings?.mediaPlaybackRequiresUserGesture = false
+            webView?.settings?.loadsImagesAutomatically = false
+            webView?.settings?.blockNetworkImage = true
 
             if (params["javascriptChannels"] != null) {
                 val names = params["javascriptChannels"] as List<String>
