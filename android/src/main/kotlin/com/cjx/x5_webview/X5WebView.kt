@@ -191,6 +191,10 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
     }
 
     override fun dispose() {
+        if(webView!=null){
+            webView.clearCache(true)
+            webView.removeAllViews()
+        }
         channel.setMethodCallHandler(null)
         webView.destroy()
     }
