@@ -8,6 +8,7 @@ import android.view.View
 import com.tencent.smtt.export.external.interfaces.IX5WebChromeClient
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest
 import com.tencent.smtt.sdk.WebChromeClient
+import com.tencent.smtt.sdk.WebSettings
 import com.tencent.smtt.sdk.WebView
 import com.tencent.smtt.sdk.WebViewClient
 import io.flutter.plugin.common.BinaryMessenger
@@ -17,7 +18,13 @@ import io.flutter.plugin.platform.PlatformView
 
 
 @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
-class X5WebView(private val context: Context?, private val id: Int, private val params: Map<String, Any>, private val messenger: BinaryMessenger?, private val containerView: View?) : PlatformView, MethodChannel.MethodCallHandler {
+class X5WebView(
+    private val context: Context?,
+    private val id: Int,
+    private val params: Map<String, Any>,
+    private val messenger: BinaryMessenger?,
+    private val containerView: View?
+) : PlatformView, MethodChannel.MethodCallHandler {
     private var webView: WebView = WebView(context)
     private val channel: MethodChannel = MethodChannel(messenger!!, "com.cjx/x5WebView_$id")
 
@@ -29,10 +36,12 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
             settings.domStorageEnabled = params["domStorageEnabled"] as Boolean
 //            settings.javaScriptCanOpenWindowsAutomatically = true
 //                settings.layoutAlgorithm=LayoutAlgorithm.SINGLE_COLUMN
-            webView?.settings?.mediaPlaybackRequiresUserGesture = false
-            webView?.settings?.loadsImagesAutomatically = false
-            webView?.settings?.blockNetworkImage = true
-
+            webView.settings?.mediaPlaybackRequiresUserGesture = false
+            webView.settings?.loadsImagesAutomatically = false
+            webView.settings?.blockNetworkImage = true
+            webView.settings?.setAppCacheEnabled(false)
+            webView.settings?.cacheMode= WebSettings.LOAD_NO_CACHE
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE,null)
             if (params["javascriptChannels"] != null) {
                 val names = params["javascriptChannels"] as List<String>
                 for (name in names) {
@@ -46,8 +55,8 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
                 loadUrl(params["url"].toString())
             }
 
-            if(params["userAgentString"] != null){
-                settings.userAgentString=params["userAgentString"].toString()
+            if (params["userAgentString"] != null) {
+                settings.userAgentString = params["userAgentString"].toString()
             }
 
             val urlInterceptEnabled = params["urlInterceptEnabled"] as Boolean
@@ -57,7 +66,7 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
 
                     if (urlInterceptEnabled) {
                         val arg = hashMapOf<String, String>()
-                        arg["url"] = loadUrl?:""
+                        arg["url"] = loadUrl ?: ""
                         channel.invokeMethod("onUrlLoading", arg)
                         return true
                     }
@@ -65,7 +74,10 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
                     return super.shouldOverrideUrlLoading(view, url)
                 }
 
-                override fun shouldOverrideUrlLoading(view: WebView, requset: WebResourceRequest?): Boolean {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    requset: WebResourceRequest?
+                ): Boolean {
                     if (urlInterceptEnabled) {
                         val arg = hashMapOf<String, String>()
                         arg["url"] = requset?.url.toString()
@@ -86,7 +98,10 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
 
             }
             webChromeClient = object : WebChromeClient() {
-                override fun onShowCustomView(view: View?, call: IX5WebChromeClient.CustomViewCallback?) {
+                override fun onShowCustomView(
+                    view: View?,
+                    call: IX5WebChromeClient.CustomViewCallback?
+                ) {
                     super.onShowCustomView(view, call)
                     channel.invokeMethod("onShowCustomView", null)
                 }
@@ -121,7 +136,7 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "loadUrl" -> {
-                Log.e("cjxaaloadurl",call.arguments.toString())
+                Log.e("cjxaaloadurl", call.arguments.toString())
                 val arg = call.arguments as Map<String, Any>
                 val url = arg["url"].toString()
                 val headers = arg["headers"] as? Map<String, String>
@@ -191,11 +206,13 @@ class X5WebView(private val context: Context?, private val id: Int, private val 
     }
 
     override fun dispose() {
-        if(webView!=null){
+        if (webView != null) {
+            webView.loadDataWithBaseURL(null, "", "text/html", "utf-8", null)
             webView.clearCache(true)
+            webView.clearHistory()
             webView.removeAllViews()
+            webView.destroy()
         }
         channel.setMethodCallHandler(null)
-        webView.destroy()
     }
 }
