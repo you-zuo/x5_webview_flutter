@@ -1,10 +1,12 @@
 package com.cjx.x5_webview
 
+import android.R
 import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import com.tencent.smtt.export.external.interfaces.IX5WebChromeClient
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest
 import com.tencent.smtt.sdk.WebChromeClient
@@ -40,8 +42,8 @@ class X5WebView(
             webView.settings?.loadsImagesAutomatically = false
             webView.settings?.blockNetworkImage = true
             webView.settings?.setAppCacheEnabled(false)
-            webView.settings?.cacheMode= WebSettings.LOAD_NO_CACHE
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE,null)
+            webView.settings?.cacheMode = WebSettings.LOAD_NO_CACHE
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
             if (params["javascriptChannels"] != null) {
                 val names = params["javascriptChannels"] as List<String>
                 for (name in names) {
@@ -94,6 +96,29 @@ class X5WebView(
                     val arg = hashMapOf<String, Any>()
                     arg["url"] = url
                     channel.invokeMethod("onPageFinished", arg)
+                }
+
+                override fun onRenderProcessGone(
+                    p0: WebView?,
+                    p1: RenderProcessGoneDetail?
+                ): Boolean {
+                    //return super.onRenderProcessGone(p0, p1)
+                    /*if (!p1?.didCrash()!!) {
+                        //由于系统内存不足，渲染器被终止。
+                        //通过创建新的WebView实例，应用程序可以正常恢复
+                        if (webView != null) {
+                            webView.destroy()
+                            webView = WebView(context)
+
+                            val url = arg!!["url"].toString()
+                            val headers = arg!!["headers"] as? Map<String, String>
+                            webView.loadUrl(url, headers)
+                        }
+                        return true
+                    }*/
+
+
+                    return true
                 }
 
             }
