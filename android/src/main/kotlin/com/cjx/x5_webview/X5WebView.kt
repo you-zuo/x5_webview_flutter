@@ -1,276 +1,243 @@
-import 'dart:async';
+package com.cjx.x5_webview
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import android.R
+import android.annotation.TargetApi
+import android.content.Context
+import android.os.Build
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import com.tencent.smtt.export.external.interfaces.IX5WebChromeClient
+import com.tencent.smtt.export.external.interfaces.WebResourceRequest
+import com.tencent.smtt.sdk.WebChromeClient
+import com.tencent.smtt.sdk.WebSettings
+import com.tencent.smtt.sdk.WebView
+import com.tencent.smtt.sdk.WebViewClient
+import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.platform.PlatformView
 
-typedef void X5WebViewCreatedCallback(X5WebViewController controller);
-typedef void PageFinishedCallback();
-typedef void ShowCustomViewCallback();
-typedef void HideCustomViewCallback();
-typedef void ProgressChangedCallback(int progress);
-typedef void MessageReceived(String name, String data);
-typedef void UrlLoading(String url);
 
-class X5WebView extends StatefulWidget {
-    final url;
-    final X5WebViewCreatedCallback? onWebViewCreated;
-    final PageFinishedCallback? onPageFinished;
-    final ShowCustomViewCallback? onShowCustomView;
-    final HideCustomViewCallback? onHideCustomView;
-    final ProgressChangedCallback? onProgressChanged;
-    final bool javaScriptEnabled;
-    final bool domStorageEnabled;
-    final JavascriptChannels? javascriptChannels;
-    final UrlLoading? onUrlLoading;
-    final Map<String, String>? header;
-    final String? userAgentString;
+@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
+class X5WebView(
+    private val context: Context?,
+    private val id: Int,
+    private val params: Map<String, Any>,
+    private val messenger: BinaryMessenger?,
+    private val containerView: View?
+) : PlatformView, MethodChannel.MethodCallHandler {
+    private var webView: WebView = WebView(context)
+    private val channel: MethodChannel = MethodChannel(messenger!!, "com.cjx/x5WebView_$id")
 
-    const X5WebView(
-            {Key? key,
-                this.url,
-                this.javaScriptEnabled = true,
-                this.onWebViewCreated,
-                this.onPageFinished,
-                this.onShowCustomView,
-                this.onHideCustomView,
-                this.javascriptChannels,
-                this.onProgressChanged,
-                this.onUrlLoading,
-                this.header,
-                this.domStorageEnabled = true,
-                this.userAgentString})
-    : super(key: key);
+    init {
+        channel.setMethodCallHandler(this)
+        webView.apply {
+//            settings.useWideViewPort = true
+            settings.javaScriptEnabled = params["javaScriptEnabled"] as Boolean
+            settings.domStorageEnabled = params["domStorageEnabled"] as Boolean
+//            settings.javaScriptCanOpenWindowsAutomatically = true
+//                settings.layoutAlgorithm=LayoutAlgorithm.SINGLE_COLUMN
+            webView.settings?.mediaPlaybackRequiresUserGesture = false
+            webView.settings?.loadsImagesAutomatically = false
+            webView.settings?.blockNetworkImage = true
+            // webView.settings?.setAppCacheEnabled(false)
+            // webView.settings?.cacheMode = WebSettings.LOAD_NO_CACHE
+            // webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            if (params["javascriptChannels"] != null) {
+                val names = params["javascriptChannels"] as List<String>
+                for (name in names) {
+                    webView.addJavascriptInterface(JavascriptChannel(name, channel, context), name)
+                }
+            }
+            if (params["header"] != null) {
+                val header = params["header"] as Map<String, String>
+                loadUrl(params["url"].toString(), header)
+            } else {
+                loadUrl(params["url"].toString())
+            }
 
-    @override
-    _X5WebViewState createState() => _X5WebViewState();
-}
+            if (params["userAgentString"] != null) {
+                settings.userAgentString = params["userAgentString"].toString()
+            }
 
-class _X5WebViewState extends State<X5WebView> {
-    @override
-    Widget build(BuildContext context) {
-        if (defaultTargetPlatform == TargetPlatform.android) {
-            //   return AndroidView(
-            //     viewType: 'com.cjx/x5WebView',
-            //     onPlatformViewCreated: _onPlatformViewCreated,
-            //     creationParamsCodec: const StandardMessageCodec(),
-            //     creationParams: _CreationParams.fromWidget(widget).toMap(),
-            //     layoutDirection: TextDirection.rtl,
-            //   );
-            // } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-            //   // 添加ios WebView
-            //   return Container();
-            // } else {
-            //   return Container();
-            return PlatformViewLink(
-                viewType: "com.cjx/x5WebView",
-            surfaceFactory: (_, controller) {
-                return AndroidViewSurface(
-                    controller: controller as AndroidViewController,
-                gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-                hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-                );
-            },
-            onCreatePlatformView: (params) {
-                return PlatformViewsService.initSurfaceAndroidView(
-                    id: params.id,
-                viewType: 'com.cjx/x5WebView',
-                // WebView content is not affected by the Android view's layout direction,
-                // we explicitly set it here so that the widget doesn't require an ambient
-                // directionality.
-                layoutDirection: TextDirection.rtl,
-                creationParams: _CreationParams.fromWidget(widget).toMap(),
-                creationParamsCodec: const StandardMessageCodec(),
-                )
-                ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-                ..addOnPlatformViewCreatedListener((int id) {
-                _onPlatformViewCreated(id);
-                // if (onWebViewPlatformCreated == null) {
-                //   return;
-                // }
-                // onWebViewPlatformCreated(
-                //   MethodChannelWebViewPlatform(id, webViewPlatformCallbacksHandler),
-                // );
-            })
-                ..create();
-            },
-            );
-        } else {
-            return Container();
+            val urlInterceptEnabled = params["urlInterceptEnabled"] as Boolean
+
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, loadUrl: String?): Boolean {
+
+                    if (urlInterceptEnabled) {
+                        val arg = hashMapOf<String, String>()
+                        arg["url"] = loadUrl ?: ""
+                        channel.invokeMethod("onUrlLoading", arg)
+                        return true
+                    }
+                    view.loadUrl(url)
+                    return super.shouldOverrideUrlLoading(view, url)
+                }
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    requset: WebResourceRequest?
+                ): Boolean {
+                    if (urlInterceptEnabled) {
+                        val arg = hashMapOf<String, String>()
+                        arg["url"] = requset?.url.toString()
+                        channel.invokeMethod("onUrlLoading", arg)
+                        return true
+                    }
+                    view.loadUrl(requset?.url.toString())
+                    return super.shouldOverrideUrlLoading(view, requset)
+                }
+
+                override fun onPageFinished(p0: WebView?, url: String) {
+                    super.onPageFinished(p0, url)
+                    //向flutter通信
+                    val arg = hashMapOf<String, Any>()
+                    arg["url"] = url
+                    channel.invokeMethod("onPageFinished", arg)
+                }
+
+                override fun onRenderProcessGone(
+                    p0: WebView?,
+                    p1: RenderProcessGoneDetail?
+                ): Boolean {
+                    //return super.onRenderProcessGone(p0, p1)
+                    /*if (!p1?.didCrash()!!) {
+                        //由于系统内存不足，渲染器被终止。
+                        //通过创建新的WebView实例，应用程序可以正常恢复
+                        if (webView != null) {
+                            webView.destroy()
+                            webView = WebView(context)
+
+                            val url = arg!!["url"].toString()
+                            val headers = arg!!["headers"] as? Map<String, String>
+                            webView.loadUrl(url, headers)
+                        }
+                        return true
+                    }*/
+
+
+                    return true
+                }
+
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowCustomView(
+                    view: View?,
+                    call: IX5WebChromeClient.CustomViewCallback?
+                ) {
+                    super.onShowCustomView(view, call)
+                    channel.invokeMethod("onShowCustomView", null)
+                }
+
+                override fun onHideCustomView() {
+                    super.onHideCustomView()
+                    channel.invokeMethod("onHideCustomView", null)
+                }
+
+                override fun onProgressChanged(p0: WebView?, p1: Int) {
+                    super.onProgressChanged(p0, p1)
+                    //加载进度
+                    val arg = hashMapOf<String, Any>()
+                    arg["progress"] = p1
+                    channel.invokeMethod("onProgressChanged", arg)
+                }
+            }
+
+//            val data= Bundle()
+            //true表示标准全屏，false表示X5全屏；不设置默认false，
+//            data.putBoolean("standardFullScreen",true)
+            //false：关闭小窗；true：开启小窗；不设置默认true，
+//            data.putBoolean("supportLiteWnd",false)
+            //1：以页面内开始播放，2：以全屏开始播放；不设置默认：1
+//            data.putInt("DefaultVideoScreen",2)
+//            x5WebViewExtension.invokeMiscMethod("setVideoParams",data)
+        }
+
+    }
+
+
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "loadUrl" -> {
+                Log.e("cjxaaloadurl", call.arguments.toString())
+                val arg = call.arguments as Map<String, Any>
+                val url = arg["url"].toString()
+                val headers = arg["headers"] as? Map<String, String>
+                webView.loadUrl(url, headers)
+                result.success(null)
+            }
+            "canGoBack" -> {
+                result.success(webView.canGoBack())
+            }
+            "canGoForward" -> {
+                result.success(webView.canGoForward())
+            }
+            "goBack" -> {
+                webView.goBack()
+                result.success(null)
+            }
+            "goForward" -> {
+                webView.goForward()
+                result.success(null)
+            }
+            "goBackOrForward" -> {
+                val arg = call.arguments as Map<String, Any>
+                val point = arg["i"] as Int
+                webView.goBackOrForward(point)
+                result.success(null)
+            }
+            "reload" -> {
+                webView.reload()
+                result.success(null)
+            }
+            "currentUrl" -> {
+                result.success(webView.url)
+            }
+            "evaluateJavascript" -> {
+                val arg = call.arguments as Map<String, Any>
+                val js = arg["js"].toString()
+                webView.evaluateJavascript(js) { value -> result.success(value) }
+            }
+
+            "addJavascriptChannels" -> {
+                val arg = call.arguments as Map<String, Any>
+                val names = arg["names"] as List<String>
+                for (name in names) {
+                    webView.addJavascriptInterface(JavascriptChannel(name, channel, context), name)
+                }
+                webView.reload()
+                result.success(null)
+
+            }
+            "isX5WebViewLoadSuccess" -> {
+                val exception = webView.x5WebViewExtension
+                if (exception == null) {
+                    result.success(false)
+                } else {
+                    result.success(true)
+                }
+            }
+
+            else -> {
+                result.notImplemented()
+            }
         }
     }
 
-    void _onPlatformViewCreated(int id) {
-        if (widget.onWebViewCreated == null) {
-            return;
+    override fun getView(): View {
+        return webView
+    }
+
+    override fun dispose() {
+        if (webView != null) {
+            webView.loadDataWithBaseURL(null, "", "text/html", "utf-8", null)
+            webView.clearCache(true)
+            webView.clearHistory()
+            webView.removeAllViews()
+            webView.destroy()
         }
-        final X5WebViewController controller = X5WebViewController._(id, widget);
-        widget.onWebViewCreated!(controller);
+        channel.setMethodCallHandler(null)
     }
-}
-
-class X5WebViewController {
-    X5WebView _widget;
-
-    X5WebViewController._(
-    int id,
-    this._widget,
-    ) : _channel = MethodChannel('com.cjx/x5WebView_$id') {
-        _channel.setMethodCallHandler(_onMethodCall);
-    }
-
-    final MethodChannel _channel;
-
-    Future<void> loadUrl(String url, {Map<String, String>? headers}) async {
-        return await _channel.invokeMethod('loadUrl', {
-            'url': url,
-            'headers': headers,
-        });
-    }
-
-    Future<bool> isX5WebViewLoadSuccess() async {
-        return await _channel.invokeMethod('isX5WebViewLoadSuccess');
-    }
-
-    Future<String> evaluateJavascript(String js) async {
-        return await _channel.invokeMethod('evaluateJavascript', {
-            'js': js,
-        });
-    }
-
-    ///  直接使用X5WebView(javascriptChannels:JavascriptChannels(names, (name, data) { }))
-    @deprecated
-    Future<void> addJavascriptChannels(
-    List<String> names, MessageReceived callback) async {
-        await _channel.invokeMethod("addJavascriptChannels", {'names': names});
-        _channel.setMethodCallHandler((call) async {
-            if (call.method == "onJavascriptChannelCallBack") {
-                Map arg = call.arguments;
-                callback(arg["name"], arg["msg"]);
-            }
-        });
-    }
-
-    Future<void> goBackOrForward(int i) async {
-        return await _channel.invokeMethod('goBackOrForward', {
-            'i': i,
-        });
-    }
-
-    Future<bool> canGoBack() async {
-        return await _channel.invokeMethod('canGoBack');
-    }
-
-    Future<bool> canGoForward() async {
-        return await _channel.invokeMethod('canGoForward');
-    }
-
-    Future<void> goBack() async {
-        return await _channel.invokeMethod('goBack');
-    }
-
-    Future<void> goForward() async {
-        return await _channel.invokeMethod('goForward');
-    }
-
-    Future<void> reload() async {
-        return await _channel.invokeMethod('reload');
-    }
-
-    Future<String> currentUrl() async {
-        return await _channel.invokeMethod('currentUrl');
-    }
-
-    Future _onMethodCall(MethodCall call) async {
-        switch (call.method) {
-            case "onPageFinished":
-            if (_widget.onPageFinished != null) {
-                _widget.onPageFinished!();
-            }
-            break;
-            case "onJavascriptChannelCallBack":
-            if (_widget.javascriptChannels?.callback != null) {
-                Map arg = call.arguments;
-                _widget.javascriptChannels?.callback(arg["name"], arg["msg"]);
-            }
-            break;
-            case "onShowCustomView":
-            if (_widget.onShowCustomView != null) {
-                _widget.onShowCustomView!();
-            }
-            break;
-            case "onHideCustomView":
-            if (_widget.onHideCustomView != null) {
-                _widget.onHideCustomView!();
-            }
-            break;
-            case "onProgressChanged":
-            if (_widget.onProgressChanged != null) {
-                Map arg = call.arguments;
-                _widget.onProgressChanged!(arg["progress"]);
-            }
-            break;
-            case "onUrlLoading":
-            if (_widget.onUrlLoading != null) {
-                Map arg = call.arguments;
-                _widget.onUrlLoading!(arg["url"]);
-            }
-            break;
-
-            default:
-            throw MissingPluginException(
-                '${call.method} was invoked but has no handler');
-        }
-    }
-}
-
-class _CreationParams {
-    _CreationParams(
-    {required this.url,
-        this.javaScriptEnabled = true,
-        this.domStorageEnabled = true,
-        this.javascriptChannels,
-        this.urlInterceptEnabled = false,
-        this.header,
-        this.userAgentString});
-
-    static _CreationParams fromWidget(X5WebView widget) {
-        return _CreationParams(
-            url: widget.url,
-        javaScriptEnabled: widget.javaScriptEnabled,
-        domStorageEnabled: widget.domStorageEnabled,
-        javascriptChannels: widget.javascriptChannels?.names,
-        urlInterceptEnabled: widget.onUrlLoading != null,
-        userAgentString: widget.userAgentString,
-        header: widget.header);
-    }
-
-    final String url;
-    final bool javaScriptEnabled;
-    final bool domStorageEnabled;
-    final List<String>? javascriptChannels;
-    final Map<String, String>? header;
-    final bool urlInterceptEnabled;
-    final String? userAgentString;
-
-    Map<String, dynamic> toMap() {
-        return <String, dynamic>{
-            'url': url,
-            'javaScriptEnabled': javaScriptEnabled,
-            'domStorageEnabled': domStorageEnabled,
-            "javascriptChannels": javascriptChannels,
-            "urlInterceptEnabled": urlInterceptEnabled,
-            "header": header,
-            "userAgentString": userAgentString
-        };
-    }
-}
-
-class JavascriptChannels {
-    List<String> names;
-    MessageReceived callback;
-
-    JavascriptChannels(this.names, this.callback);
 }
