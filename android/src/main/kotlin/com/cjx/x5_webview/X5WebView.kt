@@ -21,11 +21,11 @@ import io.flutter.plugin.platform.PlatformView
 
 @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
 class X5WebView(
-    private val context: Context?,
-    private val id: Int,
-    private val params: Map<String, Any>,
-    private val messenger: BinaryMessenger?,
-    private val containerView: View?
+        private val context: Context?,
+        private val id: Int,
+        private val params: Map<String, Any>,
+        private val messenger: BinaryMessenger?,
+        private val containerView: View?
 ) : PlatformView, MethodChannel.MethodCallHandler {
     private var webView: WebView = WebView(context)
     private val channel: MethodChannel = MethodChannel(messenger!!, "com.cjx/x5WebView_$id")
@@ -77,8 +77,8 @@ class X5WebView(
                 }
 
                 override fun shouldOverrideUrlLoading(
-                    view: WebView,
-                    requset: WebResourceRequest?
+                        view: WebView,
+                        requset: WebResourceRequest?
                 ): Boolean {
                     if (urlInterceptEnabled) {
                         val arg = hashMapOf<String, String>()
@@ -99,33 +99,18 @@ class X5WebView(
                 }
 
                 override fun onRenderProcessGone(
-                    p0: WebView?,
-                    p1: RenderProcessGoneDetail?
+                        p0: WebView?,
+                        p1: RenderProcessGoneDetail?
                 ): Boolean {
-                    //return super.onRenderProcessGone(p0, p1)
-                    /*if (!p1?.didCrash()!!) {
-                        //由于系统内存不足，渲染器被终止。
-                        //通过创建新的WebView实例，应用程序可以正常恢复
-                        if (webView != null) {
-                            webView.destroy()
-                            webView = WebView(context)
-
-                            val url = arg!!["url"].toString()
-                            val headers = arg!!["headers"] as? Map<String, String>
-                            webView.loadUrl(url, headers)
-                        }
-                        return true
-                    }*/
-
-
-                    return true
+                  
+                    return false
                 }
 
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onShowCustomView(
-                    view: View?,
-                    call: IX5WebChromeClient.CustomViewCallback?
+                        view: View?,
+                        call: IX5WebChromeClient.CustomViewCallback?
                 ) {
                     super.onShowCustomView(view, call)
                     channel.invokeMethod("onShowCustomView", null)
